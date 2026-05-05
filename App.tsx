@@ -351,6 +351,50 @@ const App: React.FC = () => {
     }
   };
 
+  const handleRun = useCallback(() => {
+    if (!prompt.trim() || appState !== AppState.LOADED || !image) return;
+
+    // If we have a history step with a selection, use it to regenerate
+    if (historyIndex > 0 && history[historyIndex].originalRect) {
+      handleRegenerate();
+    } else {
+      // Otherwise, select the center region based on current aspect ratio settings
+      const imgW = image.width;
+      const imgH = image.height;
+      
+      let targetRatio = 1; // Default 1:1
+      if (aspectRatio === '4:3') targetRatio = 4/3;
+      else if (aspectRatio === '3:4') targetRatio = 3/4;
+      else if (aspectRatio === '16:9') targetRatio = 16/9;
+      else if (aspectRatio === '9:16') targetRatio = 9/16;
+      else targetRatio = imgW / imgH; // Auto
+
+      let w = imgW * fixedSelectionSizePercentage;
+      let h = w / targetRatio;
+      
+      if (h > imgH * 0.5) {
+        h = imgH * 0.5;
+        w = h * targetRatio;
+      }
+
+      const x = (imgW - w) / 2;
+      const y = (imgH - h) / 2;
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = imgW;
+      canvas.height = imgH;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(image, 0, 0);
+        ctx.strokeStyle = '#1a73e8';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(x, y, w, h);
+        handleSelection({ x, y, w, h }, { x: window.innerWidth/2, y: window.innerHeight/2, w: 100, h: 100 }, canvas.toDataURL());
+      }
+    }
+  }, [prompt, appState, image, historyIndex, history, handleRegenerate, aspectRatio, fixedSelectionSizePercentage, handleSelection]);
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
@@ -554,6 +598,12 @@ const App: React.FC = () => {
                 <textarea 
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleRun();
+                    }
+                  }}
                   placeholder="Start typing a prompt to see what our models can do"
                   className="w-full bg-[#1e1e1e] border border-[#303030] focus:border-blue-500/50 rounded-xl p-4 pr-32 min-h-[100px] resize-none text-sm leading-relaxed transition-all focus:ring-1 focus:ring-blue-500/20 outline-none"
                 />
@@ -569,6 +619,7 @@ const App: React.FC = () => {
                      <Search className="w-4 h-4" />
                    </button>
                    <button 
+                    onClick={handleRun}
                     disabled={!prompt.trim() || appState === AppState.ENHANCING}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-[#303030] disabled:text-[#8e8e8e] px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-600/20"
                    >
